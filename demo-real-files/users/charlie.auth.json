@@ -1,0 +1,9 @@
+{
+  "user_id": "charlie-lab",
+  "session": {
+    "access_token": "fake-charlie-token",
+    "refresh_token": "fake-charlie-refresh",
+    "expires_at": "2026-05-19T18:00:00-07:00"
+  },
+  "roles": ["reviewer", "operator"]
+}

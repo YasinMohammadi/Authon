@@ -1,0 +1,9 @@
+{
+  "user_id": "alice-lab",
+  "session": {
+    "access_token": "fake-alice-token",
+    "refresh_token": "fake-alice-refresh",
+    "expires_at": "2026-05-19T10:00:00-07:00"
+  },
+  "roles": ["researcher", "operator"]
+}

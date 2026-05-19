@@ -1,0 +1,9 @@
+{
+  "user_id": "initial-working-user",
+  "session": {
+    "access_token": "fake-initial-token",
+    "refresh_token": "fake-initial-refresh",
+    "expires_at": "2026-05-19T08:00:00-07:00"
+  },
+  "roles": ["placeholder"]
+}

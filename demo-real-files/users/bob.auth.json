@@ -1,0 +1,9 @@
+{
+  "user_id": "bob-lab",
+  "session": {
+    "access_token": "fake-bob-token",
+    "refresh_token": "fake-bob-refresh",
+    "expires_at": "2026-05-19T14:00:00-07:00"
+  },
+  "roles": ["analyst"]
+}
