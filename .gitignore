@@ -6,3 +6,5 @@ dist/
 *.spec
 demo-real-files/browser-smoke-config.json
 demo-real-files/working-app/authon_backups/
+users
+uaers/*
