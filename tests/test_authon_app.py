@@ -1,65 +1,96 @@
 from __future__ import annotations
 
-import json
+import io
 import tempfile
-import threading
 import unittest
-import urllib.request
-from http.server import ThreadingHTTPServer
+from contextlib import redirect_stdout
+from datetime import date
 from pathlib import Path
 
 import authon_app
-from authon_core import AuthonError
+import authon_cli
+from authon_core import AuthonError, normalize_profile, save_state
 
 
 class AuthonAppTests(unittest.TestCase):
+    def test_run_check_prints_config_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            original_default_config_path = authon_app.default_config_path
+            config_path = Path(tmp) / "config.json"
+            save_state({"target_path": "", "profiles": [], "active_profile": ""}, config_path)
+            authon_app.default_config_path = lambda: config_path
+
+            try:
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    exit_code = authon_app.run(["--check"])
+            finally:
+                authon_app.default_config_path = original_default_config_path
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Authon config:", output.getvalue())
+        self.assertIn("profiles: 0", output.getvalue())
+
     def test_normalize_profile(self) -> None:
-        profile = authon_app.normalize_profile(
-            {"name": " Alice ", "path": " /tmp/alice/auth.json ", "switch_time": "9:05"}
+        profile = normalize_profile(
+            {"name": " Alice ", "path": " /tmp/alice/auth.json ", "switch_time": "9:05", "expires_on": " 2026-12-31 "}
         )
 
         self.assertEqual(profile["name"], "Alice")
         self.assertEqual(profile["path"], "/tmp/alice/auth.json")
         self.assertEqual(profile["switch_time"], "09:05")
+        self.assertEqual(profile["expires_on"], "2026-12-31")
 
         with self.assertRaises(AuthonError):
-            authon_app.normalize_profile({"name": "", "path": "/tmp/auth.json", "switch_time": ""})
+            normalize_profile({"name": "", "path": "/tmp/auth.json", "switch_time": ""})
+        with self.assertRaises(AuthonError):
+            normalize_profile(
+                {"name": "Alice", "path": "/tmp/auth.json", "switch_time": "", "expires_on": "31/12/2026"}
+            )
 
-    def test_browser_state_and_target_endpoint(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            original_default_config_path = authon_app.default_config_path
-            authon_app.default_config_path = lambda: Path(tmp) / "config.json"
-            app = authon_app.BrowserAuthonApp()
-            server = ThreadingHTTPServer(("127.0.0.1", 0), authon_app.make_handler(app))
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-
-            try:
-                base_url = f"http://127.0.0.1:{server.server_address[1]}"
-                state = self.read_json(f"{base_url}/api/state")
-                self.assertEqual(state["profiles"], [])
-
-                target_path = str(Path(tmp) / "auth.json")
-                updated = self.post_json(f"{base_url}/api/target", {"target_path": target_path})
-                self.assertEqual(updated["target_path"], target_path)
-            finally:
-                server.shutdown()
-                server.server_close()
-                authon_app.default_config_path = original_default_config_path
-
-    def read_json(self, url: str) -> dict[str, object]:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            return json.loads(response.read().decode("utf-8"))
-
-    def post_json(self, url: str, payload: dict[str, object]) -> dict[str, object]:
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
+    def test_cli_dashboard_renders_accounts_and_expiration(self) -> None:
+        dashboard = authon_cli.render_cli_dashboard(
+            {
+                "target_path": "/tmp/app/auth.json",
+                "active_profile": "Alice",
+                "profiles": [
+                    {
+                        "name": "Alice",
+                        "path": "/tmp/alice/auth.json",
+                        "switch_time": "09:30",
+                        "expires_on": "2999-12-31",
+                    }
+                ],
+            },
+            Path("/tmp/authon/config.json"),
+            color_enabled=False,
+            width=96,
         )
-        with urllib.request.urlopen(request, timeout=5) as response:
-            return json.loads(response.read().decode("utf-8"))
+
+        self.assertIn("Authon", dashboard)
+        self.assertIn("Linux terminal account switcher", dashboard)
+        self.assertIn("Alice", dashboard)
+        self.assertIn("2999-12-31", dashboard)
+        self.assertIn("days left", dashboard)
+        self.assertIn("Expiry:", dashboard)
+        self.assertIn("No urgent expirations", dashboard)
+
+    def test_cli_scroll_tracks_selected_row(self) -> None:
+        self.assertEqual(authon_cli._normalize_scroll(selected=0, scroll=0, page_size=4, total=10), 0)
+        self.assertEqual(authon_cli._normalize_scroll(selected=4, scroll=0, page_size=4, total=10), 1)
+        self.assertEqual(authon_cli._normalize_scroll(selected=9, scroll=4, page_size=4, total=10), 6)
+        self.assertEqual(authon_cli._normalize_scroll(selected=2, scroll=5, page_size=4, total=10), 2)
+        self.assertEqual(authon_cli._normalize_scroll(selected=0, scroll=0, page_size=4, total=0), 0)
+
+    def test_cli_expiry_summary_counts_urgent_accounts(self) -> None:
+        profiles = [
+            {"name": "Expired", "expires_on": "2026-06-01"},
+            {"name": "Soon", "expires_on": "2026-06-12"},
+            {"name": "Later", "expires_on": "2999-12-31"},
+            {"name": "Open"},
+        ]
+
+        self.assertEqual(authon_cli._expiry_summary(profiles, today=date(2026, 6, 2)), "1 expired, 1 expiring soon")
 
 
 if __name__ == "__main__":

@@ -2,29 +2,25 @@ from __future__ import annotations
 
 import json
 import sys
-import threading
-import urllib.request
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import authon_app
-from authon_core import activate_profile, default_state, save_state
+from authon_core import activate_profile, default_state, normalize_profile, save_state
 
 
 DEMO = ROOT / "demo-real-files"
 USERS = DEMO / "users"
 WORKING_AUTH = DEMO / "working-app" / "auth.json"
-CONFIG_PATH = DEMO / "browser-smoke-config.json"
+CONFIG_PATH = DEMO / "cli-smoke-config.json"
 
 
 def main() -> int:
     reset_working_auth()
     try:
         direct_flow()
-        browser_flow()
+        config_flow()
         print_summary()
     finally:
         reset_working_auth()
@@ -47,33 +43,24 @@ def direct_flow() -> None:
         raise AssertionError(f"Expected bob-lab after direct flow, got {active}")
 
 
-def browser_flow() -> None:
-    original_default_config_path = authon_app.default_config_path
-    authon_app.default_config_path = lambda: CONFIG_PATH
-    app = authon_app.BrowserAuthonApp()
-    server = ThreadingHTTPServer(("127.0.0.1", 0), authon_app.make_handler(app))
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    try:
-        base = f"http://127.0.0.1:{server.server_address[1]}"
-        post_json(f"{base}/api/target", {"target_path": str(WORKING_AUTH)})
-        post_json(
-            f"{base}/api/profiles",
+def config_flow() -> None:
+    state = default_state()
+    state["target_path"] = str(WORKING_AUTH)
+    state["profiles"] = [
+        normalize_profile(
             {
                 "name": "Charlie Lab",
                 "path": str(USERS / "charlie.auth.json"),
                 "switch_time": "18:30",
-            },
+                "expires_on": "2999-12-31",
+            }
         )
-        post_json(f"{base}/api/activate", {"index": 0})
-        active = read_user_id(WORKING_AUTH)
-        if active != "charlie-lab":
-            raise AssertionError(f"Expected charlie-lab after browser flow, got {active}")
-    finally:
-        server.shutdown()
-        server.server_close()
-        authon_app.default_config_path = original_default_config_path
+    ]
+    save_state(state, CONFIG_PATH)
+    activate_profile(Path(state["profiles"][0]["path"]), WORKING_AUTH, state["profiles"][0]["name"])
+    active = read_user_id(WORKING_AUTH)
+    if active != "charlie-lab":
+        raise AssertionError(f"Expected charlie-lab after config flow, got {active}")
 
 
 def print_summary() -> None:
@@ -87,17 +74,6 @@ def print_summary() -> None:
 
 def read_user_id(path: Path) -> str:
     return json.loads(path.read_text(encoding="utf-8"))["user_id"]
-
-
-def post_json(url: str, payload: dict[str, object]) -> dict[str, object]:
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=5) as response:
-        return json.loads(response.read().decode("utf-8"))
 
 
 if __name__ == "__main__":

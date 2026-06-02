@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
-from authon_core import AuthonError, activate_profile, normalize_switch_time
+from authon_core import AuthonError, activate_profile, expiration_status, normalize_expiration_date, normalize_switch_time
 
 
 class AuthonCoreTests(unittest.TestCase):
@@ -50,6 +51,20 @@ class AuthonCoreTests(unittest.TestCase):
         self.assertEqual(normalize_switch_time(""), "")
         with self.assertRaises(AuthonError):
             normalize_switch_time("25:00")
+
+    def test_normalize_expiration_date(self) -> None:
+        self.assertEqual(normalize_expiration_date(" 2026-12-31 "), "2026-12-31")
+        self.assertEqual(normalize_expiration_date(""), "")
+        with self.assertRaises(AuthonError):
+            normalize_expiration_date("12/31/2026")
+
+    def test_expiration_status(self) -> None:
+        today = date(2026, 6, 2)
+        self.assertEqual(expiration_status("", today), "No expiry")
+        self.assertEqual(expiration_status("2026-06-01", today), "Expired")
+        self.assertEqual(expiration_status("2026-06-02", today), "Expires today")
+        self.assertEqual(expiration_status("2026-06-03", today), "1 day left")
+        self.assertEqual(expiration_status("2026-06-12", today), "10 days left")
 
 
 if __name__ == "__main__":

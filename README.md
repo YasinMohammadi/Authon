@@ -1,25 +1,10 @@
 # Authon
 
-Authon is a tiny cross-platform desktop switcher for apps that use one active `auth.json`.
+Authon is a small Linux terminal account switcher for apps that read one active `auth.json`.
 
-You keep one `auth.json` per user somewhere on disk. Authon lets you choose a user profile and copies that user's auth file into your app's working `auth.json` path. Before every replacement, it backs up the previous working auth file.
+You keep one saved `auth.json` per account. Authon lets you choose an account in the terminal, copies that account's auth file into the working `auth.json` path, and backs up the previous working file before every replacement.
 
-## Run On Windows
-
-Double-click:
-
-```text
-Run Authon.cmd
-```
-
-Or run from PowerShell/cmd:
-
-```powershell
-cd C:\Projects\Authon
-python authon.py
-```
-
-## Run On Linux
+## Run
 
 ```bash
 cd /path/to/Authon
@@ -33,64 +18,42 @@ chmod +x run-authon.sh
 ./run-authon.sh
 ```
 
-## Run On macOS
+`python3 authon.py --cli` is accepted too, but CLI mode is the default.
 
-```bash
-cd /path/to/Authon
-python3 authon.py
-```
+## Controls
 
-For Finder launch:
+- Up/Down arrows: move between accounts.
+- Enter: activate the selected account.
+- `n`: add an account.
+- `e`: edit the selected account.
+- `r`: remove the selected account.
+- `t`: set the working `auth.json` path.
+- `b`: show the backups folder path.
+- `q`: quit.
 
-```bash
-chmod +x "Run Authon.command"
-```
+If Authon is run without an interactive terminal, it prints a read-only dashboard instead.
 
-Then double-click `Run Authon.command`.
+## Account Fields
 
-## UI Modes
-
-Authon first tries to open a native Tk desktop window. If Tk is not installed or is broken, it starts a local browser UI instead.
-
-Force browser mode:
-
-```bash
-python3 authon.py --browser
-```
-
-No external Python packages are required.
-
-## How To Use
-
-1. Set **Working auth.json** to the auth file your real app reads.
-2. Click **Add** and create one profile per user.
-3. For each profile, choose that user's saved `auth.json`.
-4. Select a user and click **Activate**.
-
-Optional: set a profile switch time as `HH:MM` and enable **Auto switch by time**. Authon must be running for scheduled switching to happen.
-
-In browser mode, enter file paths manually because browsers do not expose real local paths through file picker controls.
+- `Name`: label shown in the account list.
+- `User auth.json`: saved auth file for that account.
+- `Expires`: optional `YYYY-MM-DD` date for tracking account expiration.
+- `Switch time`: optional `HH:MM` value retained for stored profile metadata.
 
 ## Safety
 
-- Authon validates the selected user file as JSON before replacing anything.
+- Authon validates the selected account file as JSON before replacing anything.
 - The working auth file is backed up to `authon_backups` beside the working `auth.json`.
-- Authon stores paths and profile names only. It does not copy auth contents into its own config.
+- Authon stores paths, profile names, optional expiration dates, and optional switch times only. It does not copy auth contents into its own config.
 - Backup files may still contain private auth data, so keep the working auth folder secure.
 
 ## Test
 
-```powershell
-cd C:\Projects\Authon
-python authon.py --check
-python -m unittest discover -s tests
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_authon.ps1
+```bash
+cd /path/to/Authon
+python3 authon.py --check
+python3 -m unittest discover -s tests
+python3 scripts/smoke_real_files.py
 ```
 
-Real-file smoke test with fake demo auth files:
-
-```powershell
-python scripts\smoke_real_files.py
-```
-
-The demo files live in `demo-real-files`. They use fake token values only.
+The smoke test uses fake demo auth files in `demo-real-files`.
